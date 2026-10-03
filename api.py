@@ -11,7 +11,7 @@ app = FastAPI(
 )
 
 # start router with the 3 gateways and markov model
-PROVIDERS = ["cashfree", "razorpay", "strip"]
+PROVIDERS = ["cashfree", "razorpay", "stripe"]
 router = SmartRouter(gateways=PROVIDERS, target_failure_rate=0.02)
 markov = GatewayMarkovModel(p_trip=0.05, p_probe=0.40, p_heal=0.80)
 
