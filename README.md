@@ -1,4 +1,5 @@
 # Smart Payment Router
+![CI Test Suite](https://github.com/deependra675/Fintech_Smart_Router/actions/workflows/ci.yml/badge.svg)
 
 A lightweight, cost-aware payment routing service built with python and FastAPI. It routes incoming payments across multiple acquirers using dynamic loss optimization, tracks performance drift using sequential CUSUM algorithms, and models availability through discrete Markov Chains.
 
