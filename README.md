@@ -65,6 +65,7 @@ When degraded, the router periodically sends background canary probes. Once an a
 ├── test_router.py       # Math, statistical drift, & failover unit tests
 ├── test_api.py          # FastAPI endpoint integration & idempotency tests
 └── requirements.txt     # Python runtime dependencies
+```
 
 API Endpoints
 POST /charge
