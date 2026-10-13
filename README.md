@@ -119,7 +119,7 @@ uvicorn api:app --reload --port 8000
 ### Method	Endpoint	Description
 ```text
 POST	/charge 	    Executes payment with automated failover and replay safety
-POST	/route	      Returns the optimal gateway without processing a charge
+POST	/route	        Returns the optimal gateway without processing a charge
 POST	/feedback	    Accepts gateway telemetry updates
-GET	/metrics	      Reports gateway health and statistical metrics
+GET	/metrics	        Reports gateway health and statistical metrics
 ```
