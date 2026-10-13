@@ -67,70 +67,8 @@ When degraded, the router periodically sends background canary probes. Once an a
 └── requirements.txt     # Python runtime dependencies
 ```
 
-# API Endpoints
-## POST /charge
 
-Executes payment against the best acquirer with automated failover and replay safety.
-
-### Header
-
-Header	Required	Description
-Idempotency-Key	Optional	Unique string per transaction attempt.
-
-### Request Body
-
-{
-  "amount": 1200.0,
-  "card_token": "tok_visa_4242"
-}
-
-
-Response (200 OK)
-
-{
-  "transaction_id": "txn_req_001",
-  "gateway_id": "cashfree",
-  "status": "SUCCESS",
-  "amount": 1200.0,
-  "latency_ms": 112.4,
-  "is_idempotent_replay": false
-}
-
-### Idempotency: If a request with an existing Idempotency-Key is resent, the cached result is returned immediately with "is_idempotent_replay": true.
-POST /route
-
-Returns the optimal gateway according to the current loss function without processing a charge.
-
-Response (200 OK)
-
-{
-  "selected_gateway": "cashfree",
-  "gateway_status": "HEALTHY",
-  "composite_cost": 0.635
-}
-
-POST /feedback
-
-Direct telemetry ingestion endpoint for external or worker updates.
-
-Request Body
-
-{
-  "gateway_id": "cashfree",
-  "success": true,
-  "latency_ms": 105.2,
-  "is_probe": false
-}
-
-GET /metrics
-
-Reports real-time gateway health, accumulated CUSUM drift scores, and Markov steady-state availability.
-
-Local Setup & Testing
-Prerequisites
-Python 3.10+
-Git
-1. Installation
+# 1. Installation
 
 Clone the repository and navigate to the project directory:
 
@@ -140,45 +78,45 @@ cd Fintech_Smart_Router
 
 Create and activate a virtual environment.
 
-Windows PowerShell
+## Windows PowerShell
 
 python -m venv .venv
 .venv\Scripts\Activate.ps1
 
 
-Linux / macOS
+## Linux / macOS
 
 python -m venv .venv
 source .venv/bin/activate
 
 
-Install dependencies:
+# Install dependencies:
 
 pip install -r requirements.txt
 
-2. Run Test Suite
+# 2. Run Test Suite
 
 Executes all 10 unit and integration tests across statistical algorithms, failover cascades, and HTTP handlers.
 
 pytest test_router.py test_api.py -v
 
-3. Run Chaos Traffic Simulation
+# 3. Run Chaos Traffic Simulation
 
 Runs a 20-transaction workload with latency spikes, fallback rerouting, and empirical Markov state tracking.
 
 python simulation_bench.py
 
-4. Run API Server
+# 4. Run API Server
 
 Start the FastAPI server using Uvicorn:
 
 uvicorn api:app --reload --port 8000
 
 
-Interactive OpenAPI documentation will be available at http://127.0.0.1:8000/docs.
+## Interactive OpenAPI documentation will be available at http://127.0.0.1:8000/docs.
 
-Quick Reference
-Method	Endpoint	Description
+## Quick Reference
+### Method	Endpoint	Description
 POST	/charge	Executes payment with automated failover and replay safety
 POST	/route	Returns the optimal gateway without processing a charge
 POST	/feedback	Accepts gateway telemetry updates
