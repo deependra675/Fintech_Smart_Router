@@ -67,17 +67,17 @@ When degraded, the router periodically sends background canary probes. Once an a
 └── requirements.txt     # Python runtime dependencies
 ```
 
-API Endpoints
-POST /charge
+# API Endpoints
+## POST /charge
 
 Executes payment against the best acquirer with automated failover and replay safety.
 
-Header
+### Header
 
 Header	Required	Description
 Idempotency-Key	Optional	Unique string per transaction attempt.
 
-Request Body
+### Request Body
 
 {
   "amount": 1200.0,
@@ -96,7 +96,7 @@ Response (200 OK)
   "is_idempotent_replay": false
 }
 
-Idempotency: If a request with an existing Idempotency-Key is resent, the cached result is returned immediately with "is_idempotent_replay": true.
+### Idempotency: If a request with an existing Idempotency-Key is resent, the cached result is returned immediately with "is_idempotent_replay": true.
 POST /route
 
 Returns the optimal gateway according to the current loss function without processing a charge.
