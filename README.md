@@ -1,39 +1,163 @@
 # Smart Payment Router
-![CI Test Suite](https://github.com/deependra675/Fintech_Smart_Router/actions/workflows/ci.yml/badge.svg)
 
-A lightweight, cost-aware payment routing service built with python and FastAPI. It routes incoming payments across multiple acquirers using dynamic loss optimization, tracks performance drift using sequential CUSUM algorithms, and models availability through discrete Markov Chains.
+[![CI Test Suite](https://github.com/deependra675/Fintech_Smart_Router/actions/workflows/ci.yml/badge.svg)](https://github.com/deependra675/Fintech_Smart_Router/actions/workflows/ci.yml)
 
-## Core Mathematics
+An adaptive payment routing engine built with FastAPI and NumPy. Instead of static priority lists or naive round-robin, it routes transactions across multiple acquirers (Cashfree, Razorpay, Stripe) using a dynamic loss function, statistical drift detection (CUSUM + Welford's algorithm), in-flight cascading failover, and idempotent request handling.
 
-### 1. Cost Function
-Picks the gateway with the lowest total score:
+---
+
+## Why Naive Routing Fails
+
+Most simple payment implementations route either:
+1. **Statically by fee:** They always pick the cheapest provider until it completely goes down, incurring heavy timeout penalties and dropped checkouts.
+2. **Via naive thresholding:** Counting errors in rolling time windows (e.g., "trip circuit breaker if 5 errors occur in 60s"). This either triggers false alarms on isolated user card declines or reacts too slowly to sudden upstream outages.
+
+This router addresses both issues:
+- **Noise vs. Outage distinction:** Uses two-sided cumulative sum (CUSUM) control charts to absorb random user-side card declines while tripping immediately on consecutive gateway outages.
+- **Pre-timeout degradation detection:** Tracks latency variance continuously using Welford's algorithm. If an acquirer's database locks and average latency drifts upward, the router penalizes its composite score before transactions start hitting hard 504 timeouts.
+- **Safe fallback & idempotency:** If a gateway returns a 5xx during processing, the engine immediately cascades the charge to the next best provider in-flight without double-billing, enforced by client-supplied `Idempotency-Key` headers.
+
+---
+
+## Core Routing Logic
+
+### 1. Composite Cost Optimization
+At each routing decision, the engine evaluates available healthy gateways by minimizing:
 
 $$J = w_1 \cdot \text{Fee} + w_2 \cdot \text{Latency} + w_3 \cdot \text{Risk}$$
 
-### 2. CUSUM Anomaly Detection
-* **Failure spikes (Binary):**
-  $$S_n = \max(0, S_{n-1} + z_n)$$
+* $\text{Fee}$: Scaled MDR basis points (Cashfree: 1.5%, Razorpay: 1.8%, Stripe: 2.0%).
+* $\text{Latency}$: Running mean response latency normalized against baseline.
+* $\text{Risk}$: Combined cumulative drift score ($S^+_{\text{failure}} + S^+_{\text{latency}}$).
 
-* **Latency drift (Continuous):**
+### 2. Anomaly Detection (CUSUM + Welford)
 
-  $$S_n^+ = \max\left(0, S_{n-1}^+ + \frac{L_n - \mu}{\sigma} - k\right)$$
+* **Binary Failure Detector:**
+  Accumulates deviations from the target failure rate ($\mu_0 = 0.02$) with slack $k = 0.03$:
+  $$S_n^+ = \max(0, S_{n-1}^+ + (x_n - \mu_0 - k))$$
+  Isolated user errors decay back to 0. Burst failures accumulate past threshold $h = 1.0$ and trip the gateway to `DEGRADED`.
 
-  Trips gateway to `DEGRADED` when $S^+_n \ge h$.
+* **Continuous Latency Drift:**
+  Uses Welford's online variance algorithm to maintain dynamic baseline mean ($\mu$) and standard deviation ($\sigma$) in memory ($O(1)$ space). Standardized Z-scores drive upper CUSUM accumulation:
+  $$Z_n = \frac{L_n - \mu}{\sigma}, \quad S_n^+ = \max(0, S_{n-1}^+ + (Z_n - k))$$
+  Samples where $S_n^+ \ge h$ are excluded from updating the baseline to prevent poison drift.
 
-### 3. Markov Reliability
-Models state transitions across $\{H, D, P\}$:
+### 3. Reliability & Recovery (Discrete Markov Model)
+Gateways operate across three states: `HEALTHY` ($H$), `DEGRADED` ($D$), and `PROBING` ($P$). 
+
+State transitions follow the matrix:
 
 $$P = \begin{bmatrix} 1 - p_{\text{trip}} & p_{\text{trip}} & 0 \\ 0 & 1 - p_{\text{probe}} & p_{\text{probe}} \\ p_{\text{heal}} & 1 - p_{\text{heal}} & 0 \end{bmatrix}$$
 
-Solves steady-state availability via $\boldsymbol{\pi} P = \boldsymbol{\pi}$.
+When degraded, the router periodically sends background canary probes. Once an acquirer records $N$ consecutive successful probe responses (streak requirement), the engine resets CUSUM drift scores and restores it to `HEALTHY`. The theoretical steady-state availability vector is computed by solving $\boldsymbol{\pi} P = \boldsymbol{\pi}$ subject to $\sum \pi_i = 1$.
 
-## Project Structure
+---
+
+## Repository Structure
 
 ```text
-├── api.py               # FastAPI endpoints (/route, /feedback, /metrics)
-├── router_engine.py     # Routing loss logic & CUSUM state trackers
-├── markov_model.py      # DTMC matrix solver & transition tracker
-├── mock_gateway.py      # Synthetic acquirer behavior & latency injection
-├── simulation_bench.py  # End-to-end chaos run & empirical verification
-├── test_router.py       # Core engine & Markov unit tests
-└── test_api.py          # FastAPI endpoint integration tests
+├── api.py               # FastAPI endpoints (/charge, /route, /feedback, /metrics)
+├── router_engine.py     # Routing loss logic & CUSUM state management
+├── cusum_detector.py    # Welford variance tracker & CUSUM detectors
+├── markov_model.py      # Discrete Markov matrix solver & transition recorder
+├── mock_gateway.py      # Acquirer simulation & chaos injection harness
+├── simulation_bench.py  # End-to-end chaos traffic simulation script
+├── test_router.py       # Math, statistical drift, & failover unit tests
+├── test_api.py          # FastAPI endpoint integration & idempotency tests
+└── requirements.txt     # Python runtime dependencies
+
+API Endpoints
+POST /charge
+
+Executes payment against the best acquirer with automated failover and replay safety.
+
+Header:
+
+Idempotency-Key (optional): Unique string per transaction attempt.
+
+Request Body:
+
+{
+  "amount": 1200.0,
+  "card_token": "tok_visa_4242"
+}
+
+
+Response (200 OK):
+
+{
+  "transaction_id": "txn_req_001",
+  "gateway_id": "cashfree",
+  "status": "SUCCESS",
+  "amount": 1200.0,
+  "latency_ms": 112.4,
+  "is_idempotent_replay": false
+}
+
+
+If a request with an existing Idempotency-Key is resent, the cached result is returned immediately with "is_idempotent_replay": true.
+
+POST /route
+
+Returns the optimal gateway according to the current loss function without processing a charge.
+
+Response (200 OK):
+
+{
+  "selected_gateway": "cashfree",
+  "gateway_status": "HEALTHY",
+  "composite_cost": 0.635
+}
+
+POST /feedback
+
+Direct telemetry ingestion endpoint for external or worker updates.
+
+Request Body:
+
+{
+  "gateway_id": "cashfree",
+  "success": true,
+  "latency_ms": 105.2,
+  "is_probe": false
+}
+
+GET /metrics
+
+Reports real-time gateway health, accumulated CUSUM drift scores, and Markov steady-state availability.
+
+Local Setup & Testing
+1. Installation
+
+Requires Python 3.10+:
+
+git clone https://github.com/deependra675/Fintech_Smart_Router.git
+cd Fintech_Smart_Router
+
+python -m venv .venv
+
+# On Windows PowerShell:
+.venv\Scripts\Activate.ps1
+
+# On Linux/macOS:
+source .venv/bin/activate
+
+pip install -r requirements.txt
+
+2. Run Test Suite
+
+Executes all 10 unit and integration tests across statistical algorithms, failover cascades, and HTTP handlers:
+
+pytest test_router.py test_api.py -v
+
+3. Run Chaos Traffic Simulation
+
+Runs a 20-transaction workload with latency spikes, fallback rerouting, and empirical Markov state tracking:
+
+python simulation_bench.py
+
+4. Run API Server
+uvicorn api:app --reload --port 8000
+
+
+Interactive OpenAPI documentation will be available at http://127.0.0.1:8000/docs.

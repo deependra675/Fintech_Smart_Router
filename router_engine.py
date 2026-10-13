@@ -75,7 +75,7 @@ class SmartRouter:
 
         return None
 
-    def compute_gateay_cost(
+    def compute_gateway_cost(
             self,
             gateway_id: str,
             w_fee: float = 0.4,
@@ -104,7 +104,7 @@ class SmartRouter:
             if self.gateways[gw].status == GatewayStatus.HEALTHY
         ]
         if healthy_gws:
-            return min(healthy_gws, key=lambda gw: self.compute_gateay_cost(gw))
+            return min(healthy_gws, key=lambda gw: self.compute_gateway_cost(gw))
         
         return min(
             self.gateways.keys(),

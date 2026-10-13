@@ -40,14 +40,14 @@ def test_smart_router_failover_and_recovery():
     providers = ["razorpay", "cashfree"]
     router = SmartRouter(gateways=providers, target_failure_rate=0.02)
 
-    # initial route should be razorpay
+    # initial route should be cashfree (lower MDR)
     assert router.route() == "cashfree"
 
-    # simulate hard failures on razorpay to trip breaker
+    # simulate hard failures on cashfree to trip breaker to Degraded
     for _ in range(5):
         router.record_transaction("cashfree", success=False, latency_ms=100.0)
 
-    # primary should failover to cashfree
+    # primary degraded, which is cashfree and failover routes to razorpay
     assert router.gateways["cashfree"].status == GatewayStatus.DEGRADED
     assert router.route() == "razorpay"
 
