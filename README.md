@@ -68,20 +68,25 @@ When degraded, the router periodically sends background canary probes. Once an a
 ```
 
 API Endpoints
-1. POST /charge
+POST /charge
 
 Executes payment against the best acquirer with automated failover and replay safety.
 
 Header
+
 Header	Required	Description
 Idempotency-Key	Optional	Unique string per transaction attempt.
+
 Request Body
+
 {
   "amount": 1200.0,
   "card_token": "tok_visa_4242"
 }
 
-Response — 200 OK
+
+Response (200 OK)
+
 {
   "transaction_id": "txn_req_001",
   "gateway_id": "cashfree",
@@ -92,22 +97,24 @@ Response — 200 OK
 }
 
 Idempotency: If a request with an existing Idempotency-Key is resent, the cached result is returned immediately with "is_idempotent_replay": true.
-2. POST /route
+POST /route
 
 Returns the optimal gateway according to the current loss function without processing a charge.
 
-Response — 200 OK
+Response (200 OK)
+
 {
   "selected_gateway": "cashfree",
   "gateway_status": "HEALTHY",
   "composite_cost": 0.635
 }
 
-3. POST /feedback
+POST /feedback
 
 Direct telemetry ingestion endpoint for external or worker updates.
 
 Request Body
+
 {
   "gateway_id": "cashfree",
   "success": true,
@@ -115,7 +122,7 @@ Request Body
   "is_probe": false
 }
 
-4. GET /metrics
+GET /metrics
 
 Reports real-time gateway health, accumulated CUSUM drift scores, and Markov steady-state availability.
 
@@ -167,11 +174,8 @@ Start the FastAPI server using Uvicorn:
 
 uvicorn api:app --reload --port 8000
 
-Interactive API Documentation
 
-Once the server is running, access the OpenAPI documentation at:
-
-http://127.0.0.1:8000/docs
+Interactive OpenAPI documentation will be available at http://127.0.0.1:8000/docs.
 
 Quick Reference
 Method	Endpoint	Description
